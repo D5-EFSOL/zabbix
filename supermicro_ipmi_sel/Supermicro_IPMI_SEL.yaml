@@ -1,0 +1,70 @@
+zabbix_export:
+  version: '6.0'
+  date: '2026-10-07T10:11:59Z'
+  groups:
+    - uuid: 550e8400e29b41d4a716446655440000
+      name: Шаблоны_Д5
+  templates:
+    - uuid: 32d08696944d408ba8562b834ec67fc8
+      template: d5_monitoring_IPMI_Supermicro
+      name: 'd5_Мониторинг IPMI Supermicro'
+      description: |
+        Мониторинг ошибок памяти ECC, ЦП и прочих аппаратных сбоев по журналу SEL (System Event Log) серверов Supermicro через утилиту IPMICFG-Win.exe -sel list -d 1 (Zabbix agent, пассивный режим). Дедупликация оповещений по каждой аппаратной позиции выполняется низкоуровневым обнаружением (LLD): на каждую комбинацию «тип/локация» создаётся отдельный триггер, настроенный как SINGLE (одно проблемное событие) + без автоматического восстановления + ручное закрытие, поэтому новое идентичное событие в SEL не создаёт дубль, пока проблема остаётся активной. Требует PowerShell-обёртку supermicro_sel.ps1 и соответствующие записи UserParameter на хосте агента.
+        
+        Диагностика сбоя чтения SEL («Failed to get SEL allocation info, Completion Code=FFh»): FFh — стандартный код завершения IPMI «unspecified error» (неопределённая ошибка), возвращаемый BMC при сбое команды Get SEL Info. Типичные причины: устаревшая или багованная прошивка BMC, повреждённый либо переполненный SEL, запуск IPMICFG без прав администратора, несоответствие версии IPMICFG поколению BMC. Способы устранения — в README развёртывания.
+      groups:
+        - name: Шаблоны_Д5
+      items:
+        - uuid: 14e6de912e4540e48a40ce3ad4765bcc
+          name: 'Supermicro: сырой вывод SEL (за 1 день)'
+          key: supermicro.sel.raw
+          delay: 1h
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          description: 'Сырой текстовый вывод IPMICFG-Win.exe -sel list -d 1, для разбора и настройки парсера.'
+        - uuid: b38270b03c3e4fd8837e852d26970d50
+          name: 'Supermicro: статус сбора SEL'
+          key: supermicro.sel.status
+          delay: 30m
+          history: 7d
+          trends: '0'
+          description: '0 = SEL прочитан успешно, 1 = чтение SEL не удалось (например, Failed to get SEL allocation info, Completion Code=FFh). Защита от «слепого» мониторинга.'
+          triggers:
+            - uuid: 97623dcf98144c5da98fae3435f8349e
+              expression: 'avg(/d5_monitoring_IPMI_Supermicro/supermicro.sel.status,#3)=1'
+              name: 'Supermicro: Ошибка обращения к журналу SEL'
+              priority: HIGH
+              description: 'Не удалось прочитать SEL через IPMICFG-Win.exe. Пока активен этот триггер, аппаратные ошибки НЕ отслеживаются. Типичная причина: «Failed to get SEL allocation info, Completion Code=FFh» (IPMI unspecified error) — проверьте прошивку BMC, состояние SEL, версию IPMICFG и права администратора. Восстанавливается автоматически, как только чтение SEL снова становится успешным.'
+        - uuid: 32bcbf3c7a924884973f0d1e21689405
+          name: 'Supermicro: сводка ошибок SEL (JSON)'
+          key: supermicro.sel.summary
+          delay: 1h
+          history: 7d
+          trends: '0'
+          value_type: CHAR
+          description: 'JSON-сводка количества аппаратных ошибок SEL по категориям (memory_correctable / memory_uncorrectable / cpu / other) и признак успешности чтения SEL, за последний 1 день.'
+      discovery_rules:
+        - uuid: 29ea9d97b4734b46915140271bd3981d
+          name: 'Обнаружение аппаратных ошибок SEL Supermicro'
+          key: supermicro.sel.discovery
+          delay: 1h
+          item_prototypes:
+            - uuid: d88e0f3d76964f559139071bb971df86
+              name: 'Supermicro: количество ошибок {#TYPE} в {#LOCATION}'
+              key: 'supermicro.sel.count[{#TYPE},{#LOCATION}]'
+              delay: 1h
+              history: 7d
+              trends: '0'
+              description: 'Количество событий SEL типа {#TYPE} в аппаратной позиции {#LOCATION} за последний 1 день.'
+              trigger_prototypes:
+                - uuid: 4152f2a343f64d188cda2f23ae83b70d
+                  expression: 'last(/d5_monitoring_IPMI_Supermicro/supermicro.sel.count[{#TYPE},{#LOCATION}])>0'
+                  recovery_mode: NONE
+                  name: 'Supermicro: аппаратная ошибка {#TYPE} в {#LOCATION}'
+                  priority: HIGH
+                  description: 'Обнаружена аппаратная ошибка {#TYPE} в позиции {#LOCATION} в журнале SEL (за последний 1 день). Срабатывает один раз и не дублируется, пока проблема остаётся открытой. Не восстанавливается автоматически (записи SEL сами не очищаются): устраните аппаратную неисправность, при необходимости очистите SEL, затем закройте проблему вручную.'
+                  manual_close: 'YES'
+      tags:
+        - tag: hardware
+          value: supermicro
