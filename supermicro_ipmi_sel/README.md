@@ -36,6 +36,7 @@ UserParameter=supermicro.sel.count[*],powershell.exe -NoProfile -ExecutionPolicy
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\Windows\zabbix-agent\supermicro_sel.ps1 -Mode raw
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\Windows\zabbix-agent\supermicro_sel.ps1 -Mode discover
+```
 
 ## Как это работает
 
