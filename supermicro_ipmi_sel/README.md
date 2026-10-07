@@ -67,8 +67,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\Windows\zabbix-agent\supe
 (защита от «слепого» мониторинга) и восстанавливается автоматически.
 
 
-```
-
 ## Ошибка `Failed to get SEL allocation info, Completion Code=FFh`
 
 `FFh` — это стандартный код завершения IPMI **«unspecified error»** (неопределённая ошибка):
